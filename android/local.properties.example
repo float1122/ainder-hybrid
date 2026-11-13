@@ -1,0 +1,6 @@
+# Copy to android/local.properties (git-ignored). All keys are optional.
+sdk.dir=/path/to/Android/sdk
+# ainder.baseUrl=https://ainder.ai
+# ai.cloudModel=gemini-3.5-flash-lite
+# Release builds: use the App Check debug provider (true) or Play Integrity (false).
+# appcheck.debugProvider=true
