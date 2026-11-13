@@ -63,3 +63,11 @@ final class PrivateVaultTests: XCTestCase {
         XCTAssertFalse(n.message.contains("is stored"))
     }
 }
+
+final class SensitiveCopyTests: XCTestCase {
+    func testCopiedKeyIsLocalOnlyAndExpiresAfterSixtySeconds() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        XCTAssertTrue(SensitiveCopy.localOnly)
+        XCTAssertEqual(SensitiveCopy.expiry(from: now), Date(timeIntervalSince1970: 1_060))
+    }
+}

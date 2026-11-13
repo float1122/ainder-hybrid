@@ -98,3 +98,11 @@ public struct KeyNotice: Equatable, Sendable {
         )
     }
 }
+
+/// Rules for copying a secret (the `aind_` key) to the pasteboard: this device only (no Universal
+/// Clipboard) and it expires after `lifetime`.
+public enum SensitiveCopy {
+    public static let lifetime: TimeInterval = 60
+    public static let localOnly = true
+    public static func expiry(from now: Date) -> Date { now.addingTimeInterval(lifetime) }
+}

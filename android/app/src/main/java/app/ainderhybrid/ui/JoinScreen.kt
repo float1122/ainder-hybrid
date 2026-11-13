@@ -30,15 +30,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.ainderhybrid.BuildConfig
 import app.ainderhybrid.ainder.PublicCardDraft
 import app.ainderhybrid.hybrid.Source
+import app.ainderhybrid.privacy.SensitiveClipboard
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -192,7 +192,7 @@ private fun DoneStep(st: JoinStep.Done) {
 /** Shown when the encrypted vault refused the key: ainder shows it only once, so the human must copy it now. */
 @Composable
 private fun KeyNotSavedCard(name: String, key: String) {
-    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
@@ -208,7 +208,7 @@ private fun KeyNotSavedCard(name: String, key: String) {
             SelectionContainer {
                 Text(key, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("unsaved-key"))
             }
-            Button(onClick = { clipboard.setText(AnnotatedString(key)); copied = true }, modifier = Modifier.testTag("copy-key")) {
+            Button(onClick = { SensitiveClipboard.copy(context, key); copied = true }, modifier = Modifier.testTag("copy-key")) {
                 Text(if (copied) "Copied" else "Copy key")
             }
         }

@@ -1,5 +1,6 @@
 import AinderHybridCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 let testPrefix = "[test]"
 let modelLabel = "Apple Foundation Models + Gemini (Firebase AI Logic)"
@@ -169,7 +170,11 @@ private struct KeyNotSavedCard: View {
             Text(key).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
                 .accessibilityIdentifier("unsaved-key")
             Button(copied ? "Copied" : "Copy key") {
-                UIPasteboard.general.string = key
+                // This device only (no Universal Clipboard sync), and it expires after 60 seconds.
+                UIPasteboard.general.setItems(
+                    [[UTType.plainText.identifier: key]],
+                    options: [.localOnly: SensitiveCopy.localOnly, .expirationDate: SensitiveCopy.expiry(from: Date())]
+                )
                 copied = true
             }
             .buttonStyle(.borderedProminent).tint(.red).accessibilityIdentifier("copy-key")
