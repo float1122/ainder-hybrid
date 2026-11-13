@@ -22,6 +22,10 @@ data class Verdict(val like: Boolean, val why: String)
 data class LetterDraft(val text: String, val affinityDelta: Int, val reason: String)
 data class GuardReport(val ok: Boolean, val leaks: List<String>)
 
+/** A safe brief plus the fingerprint of the private notes it was made from (see [Agent.fingerprint]). */
+@kotlinx.serialization.Serializable
+data class StoredBrief(val text: String, val notesFingerprint: String)
+
 /** Composed letter: each step keeps its own source so the UI can badge every AI result. */
 data class ComposedLetter(
     val brief: Sourced<String>,
@@ -91,13 +95,25 @@ class Agent(private val ai: HybridAi, private val prompts: Prompts) {
     }
 
     // ---- C. safe brief (private input, on-device only) ----
-    suspend fun safeBrief(op: OperatorPrivate, previous: String): Sourced<String> {
-        if (op.notes.isBlank()) return Sourced(previous, Source.NO_AI, "No notes today")
+    /**
+     * Returns a brief that may go into a cloud prompt. A model brief is code-guarded against the
+     * notes that produced it; a stored brief is reused only if it was made from the current notes
+     * (same fingerprint) and still passes the guard. Anything else yields an empty brief.
+     */
+    suspend fun safeBrief(op: OperatorPrivate, previous: StoredBrief?): Sourced<String> {
+        val reusable = previous
+            ?.takeIf { it.notesFingerprint == fingerprint(op) && LeakGuard.check(it.text, op.neverShare, op.notes).ok }
+            ?.text.orEmpty()
+        if (op.notes.isBlank()) return Sourced(reusable, Source.NO_AI, "No notes today")
         val out = ai.run(AiTask.BRIEF, prompts.render(AiTask.BRIEF, mapOf("notes" to op.notes)))
         val lessons = (out as? AiOutcome.Done)?.let { JsonExtract.obj(it.result.text)?.list("lessons") }.orEmpty()
-        if (out is AiOutcome.Done && lessons.isNotEmpty()) return Sourced(lessons.joinToString("\n") { "- $it" }, out.result.source)
-        // Fallback: reuse the brief the human wrote or approved before. Never the raw notes.
-        return Sourced(previous, Source.NO_AI, reason(out))
+        if (out is AiOutcome.Done && lessons.isNotEmpty()) {
+            val text = lessons.joinToString("\n") { "- $it" }
+            if (!LeakGuard.check(text, op.neverShare, op.notes).ok) return Sourced("", Source.NO_AI, "Brief rejected by the privacy guard")
+            return Sourced(text, out.result.source)
+        }
+        // Fallback: reuse a brief made from these same notes. Never the raw notes.
+        return Sourced(reusable, Source.NO_AI, reason(out))
     }
 
     // ---- F + G. write a letter (cloud), then guard it on the phone; one rewrite if it leaks ----
@@ -173,13 +189,25 @@ class Agent(private val ai: HybridAi, private val prompts: Prompts) {
             append("location: ").append(c.locationText.ifBlank { "unknown" })
         }
 
-        /** Partner letters are wrapped as untrusted data, mirroring the server's `untrusted_message`. */
+        /**
+         * Partner letters are wrapped as untrusted data, mirroring the server's `untrusted_message`.
+         * Every '<' and '>' in letter bodies is escaped, so no body can open or close a tag.
+         */
         fun threadText(thread: List<Letter>): String = thread.takeLast(THREAD_WINDOW).joinToString("\n") { l ->
-            if (l.fromPartner) "<untrusted_message>${l.body.replace("</untrusted_message>", "")}</untrusted_message>"
-            else "ME: ${l.body}"
+            if (l.fromPartner) "<untrusted_message>${neutralize(l.body)}</untrusted_message>"
+            else "ME: ${neutralize(l.body)}"
         }.ifEmpty { "(no letters yet: this is the first letter)" }
 
         private const val THREAD_WINDOW = 12
+
+        fun neutralize(text: String): String = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+        /** SHA-256 of the private notes and never-share list; changes whenever either changes. */
+        fun fingerprint(op: OperatorPrivate): String {
+            val material = op.notes + "\u0000" + op.neverShare.map(String::trim).sorted().joinToString("\u0001")
+            return java.security.MessageDigest.getInstance("SHA-256").digest(material.toByteArray(Charsets.UTF_8))
+                .joinToString("") { "%02x".format(it) }
+        }
 
         private fun reason(out: AiOutcome?): String = (out as? AiOutcome.UseFallback)?.reason ?: "Model output unreadable"
 

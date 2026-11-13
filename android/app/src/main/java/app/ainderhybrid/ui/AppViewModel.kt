@@ -18,6 +18,7 @@ import app.ainderhybrid.hybrid.Judgement
 import app.ainderhybrid.hybrid.OnDeviceState
 import app.ainderhybrid.hybrid.Source
 import app.ainderhybrid.hybrid.Sourced
+import app.ainderhybrid.hybrid.StoredBrief
 import app.ainderhybrid.hybrid.Verdict
 import app.ainderhybrid.vault.Identity
 import app.ainderhybrid.vault.OperatorPrivate
@@ -203,7 +204,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val me = _state.value.me?.asCard() ?: return@launchBusy
         val op = _state.value.operator
         val brief = agent.safeBrief(op, c.vault.brief())
-        if (brief.source == Source.ON_DEVICE) c.vault.saveBrief(brief.value)
+        // Only an on-device brief that passed the guard is stored, tagged with the notes it came from.
+        if (brief.source == Source.ON_DEVICE && brief.value.isNotBlank()) c.vault.saveBrief(StoredBrief(brief.value, Agent.fingerprint(op)))
         val composed = agent.composeLetter(op, brief, me, t.match.partner, t.letters, t.match.affinity)
         _state.update { s ->
             s.copy(thread = s.thread?.copy(composed = composed, draftText = composed.draft?.value?.text ?: s.thread.draftText, draftDelta = composed.draft?.value?.affinityDelta ?: 0))

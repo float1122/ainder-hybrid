@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import app.ainderhybrid.hybrid.Agent
+import app.ainderhybrid.hybrid.StoredBrief
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
@@ -68,11 +70,17 @@ class PrivateVault(context: Context) {
         prefs.getString(K_OPERATOR, null)?.let { runCatching { json.decodeFromString(OperatorPrivate.serializer(), it) }.getOrNull() }
             ?: OperatorPrivate()
 
-    fun saveOperator(op: OperatorPrivate) =
-        prefs.edit().putString(K_OPERATOR, json.encodeToString(OperatorPrivate.serializer(), op)).apply()
+    /** Saving different notes or never-share terms invalidates the stored safe brief. */
+    fun saveOperator(op: OperatorPrivate) {
+        val edit = prefs.edit().putString(K_OPERATOR, json.encodeToString(OperatorPrivate.serializer(), op))
+        if (Agent.fingerprint(operator()) != Agent.fingerprint(op)) edit.remove(K_BRIEF)
+        edit.apply()
+    }
 
-    fun brief(): String = prefs.getString(K_BRIEF, "") ?: ""
-    fun saveBrief(brief: String) = prefs.edit().putString(K_BRIEF, brief).apply()
+    fun brief(): StoredBrief? =
+        prefs.getString(K_BRIEF, null)?.let { runCatching { json.decodeFromString(StoredBrief.serializer(), it) }.getOrNull() }
+
+    fun saveBrief(brief: StoredBrief) = prefs.edit().putString(K_BRIEF, json.encodeToString(StoredBrief.serializer(), brief)).apply()
 
     fun memory(matchId: String): String = memories()[matchId].orEmpty()
 
