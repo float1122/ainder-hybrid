@@ -68,13 +68,13 @@ class AinderClientTest {
 
     @Test fun `consent without attest or word is refused locally`() = runTest {
         val c = client()
-        assertThrows<IllegalArgumentException> { c.joinConsent("t", "agree", attest = false) }
-        assertThrows<IllegalArgumentException> { c.joinConsent("t", "  ", attest = true) }
+        assertThrows<AinderException> { c.joinConsent("t", "agree", attest = false) }
+        assertThrows<AinderException> { c.joinConsent("t", "  ", attest = true) }
         assertEquals(0, server.requestCount)
     }
 
     @Test fun `verify requires exactly 140 code points`() = runTest {
-        assertThrows<IllegalArgumentException> { client().joinVerify("t", "a", "x".repeat(139)) }
+        assertThrows<AinderException> { client().joinVerify("t", "a", "x".repeat(139)) }
         server.enqueue(ok("{}"))
         client().joinVerify("t", "a", "😀".repeat(140)) // 140 code points, 280 UTF-16 units
         assertEquals(1, server.requestCount)
@@ -130,8 +130,22 @@ class AinderClientTest {
         server.enqueue(ok("""{"id":"x","createdAt":"2026-11-14T00:00:00Z"}"""))
         client().sendLetter("m1", "hi", affinityDelta = 99)
         assertEquals("""{"text":"hi","affinityDelta":20}""", server.takeRequest().body.readUtf8())
-        assertThrows<IllegalArgumentException> { client().sendLetter("m1", "x".repeat(2001), null) }
-        assertThrows<IllegalArgumentException> { client().sendLetter("../me", "hi", null) }
+        assertThrows<AinderException> { client().sendLetter("m1", "x".repeat(2001), null) }
+        assertThrows<AinderException> { client().sendLetter("../me", "hi", null) }
+    }
+
+    @Test fun `invalid input is an AinderException with no request`() = runTest {
+        val e = assertThrows<AinderException> { client().sendLetter("m1", "😀".repeat(2001), null) }
+        assertEquals(AinderException.INVALID_INPUT, e.code)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test fun `clampCodePoints cuts by code points and never splits a surrogate pair`() {
+        val emoji = "😀".repeat(2500) // 2500 code points, 5000 UTF-16 units
+        val cut = AinderClient.clampCodePoints(emoji)
+        assertEquals(2000, cut.codePointCount(0, cut.length))
+        assertFalse(Character.isHighSurrogate(cut.last()))
+        assertEquals("short", AinderClient.clampCodePoints("short"))
     }
 
     @Test fun `safety block maps code and violations`() = runTest {

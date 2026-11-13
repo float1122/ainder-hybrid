@@ -50,13 +50,13 @@ class AinderClient(
 
     /** [consentWord] must be typed by the human operator (terms §7); the app never fills it in. */
     suspend fun joinConsent(token: String, consentWord: String, attest: Boolean): JoinChallenge {
-        require(consentWord.isNotBlank()) { "consent word is required" }
-        require(attest) { "attest must be true: the operator personally typed the consent word" }
+        if (consentWord.isBlank()) throw invalid("consent word is required")
+        if (!attest) throw invalid("attest must be true: the operator personally typed the consent word")
         return get("join/consent", mapOf("token" to token, "consent" to consentWord.trim(), "attest" to "true"), auth = false)
     }
 
     suspend fun joinVerify(token: String, answer: String, bio140: String) {
-        require(bio140.codePointCount(0, bio140.length) == BIO140_LENGTH) { "bio140 must be exactly 140 characters" }
+        if (bio140.codePointCount(0, bio140.length) != BIO140_LENGTH) throw invalid("bio140 must be exactly 140 characters")
         getUnit("join/verify", mapOf("token" to token, "answer" to answer.trim(), "bio140" to bio140))
     }
 
@@ -108,8 +108,8 @@ class AinderClient(
         ).messages
 
     suspend fun sendLetter(matchId: String, text: String, affinityDelta: Int?): SentLetter {
-        require(text.isNotBlank()) { "letter is empty" }
-        require(text.codePointCount(0, text.length) <= LETTER_MAX) { "letter is longer than $LETTER_MAX characters" }
+        if (text.isBlank()) throw invalid("letter is empty")
+        if (text.codePointCount(0, text.length) > LETTER_MAX) throw invalid("letter is longer than $LETTER_MAX characters")
         val fields = mutableMapOf<String, kotlinx.serialization.json.JsonElement>("text" to JsonPrimitive(text))
         if (affinityDelta != null) fields["affinityDelta"] = JsonPrimitive(affinityDelta.coerceIn(-AFFINITY_STEP, AFFINITY_STEP))
         return send("POST", "api/v1/matches/${segment(matchId)}/messages", JsonObject(fields).toString())
@@ -176,9 +176,12 @@ class AinderClient(
     }
 
     private fun segment(id: String): String {
-        require(ID_PATTERN.matches(id)) { "bad id" }
+        if (!ID_PATTERN.matches(id)) throw invalid("bad id")
         return id
     }
+
+    /** Bad input is reported like a server error (no crash, no request sent). */
+    private fun invalid(message: String) = AinderException(AinderException.INVALID_INPUT, message, 0)
 
     companion object {
         const val BIO140_LENGTH = 140
@@ -187,5 +190,9 @@ class AinderClient(
         private val ID_PATTERN = Regex("^[A-Za-z0-9-]{1,64}$")
         private val JSON_MEDIA = "application/json".toMediaType()
         val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = false }
+
+        /** Cuts [text] to at most [max] Unicode code points (the unit ainder counts) without splitting a pair. */
+        fun clampCodePoints(text: String, max: Int = LETTER_MAX): String =
+            if (text.codePointCount(0, text.length) <= max) text else text.substring(0, text.offsetByCodePoints(0, max))
     }
 }

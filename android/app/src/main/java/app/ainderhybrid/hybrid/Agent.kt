@@ -1,5 +1,6 @@
 package app.ainderhybrid.hybrid
 
+import app.ainderhybrid.ainder.AinderClient
 import app.ainderhybrid.ainder.Letter
 import app.ainderhybrid.ainder.ProfileCard
 import app.ainderhybrid.privacy.Bio140
@@ -67,7 +68,7 @@ class Agent(private val ai: HybridAi, private val prompts: Prompts) {
 
     // ---- D. compatibility (public cards only, prefer cloud) ----
     suspend fun judge(me: ProfileCard, them: ProfileCard): Sourced<Judgement> {
-        val prompt = prompts.render(AiTask.JUDGE, mapOf("me" to cardText(me), "them" to cardText(them)))
+        val prompt = prompts.render(AiTask.JUDGE, mapOf("me" to cardText(me), "them" to partnerCardText(them)))
         val out = ai.run(AiTask.JUDGE, prompt)
         val o = (out as? AiOutcome.Done)?.let { JsonExtract.obj(it.result.text) }
         val score = o?.get("score")?.jsonPrimitive?.intOrNull
@@ -82,7 +83,7 @@ class Agent(private val ai: HybridAi, private val prompts: Prompts) {
     suspend fun rerank(op: OperatorPrivate, judgement: Judgement, them: ProfileCard): Sourced<Verdict> {
         val prompt = prompts.render(
             AiTask.RERANK,
-            mapOf("persona" to op.persona, "judge" to "score=${judgement.score}; ${judgement.reasons.joinToString("; ")}", "them" to cardText(them)),
+            mapOf("persona" to op.persona, "judge" to "score=${judgement.score}; ${judgement.reasons.joinToString("; ")}", "them" to partnerCardText(them)),
         )
         val out = ai.run(AiTask.RERANK, prompt)
         val o = (out as? AiOutcome.Done)?.let { JsonExtract.obj(it.result.text) }
@@ -134,8 +135,8 @@ class Agent(private val ai: HybridAi, private val prompts: Prompts) {
             val prompt = prompts.render(
                 AiTask.LETTER,
                 mapOf(
-                    "myName" to me.name, "theirName" to them.name, "affinity" to affinity.toString(),
-                    "me" to cardText(me), "them" to cardText(them), "brief" to cloudBrief.ifBlank { "(none)" },
+                    "myName" to me.name, "theirName" to inline(them.name), "affinity" to affinity.toString(),
+                    "me" to cardText(me), "them" to partnerCardText(them), "brief" to cloudBrief.ifBlank { "(none)" },
                     "thread" to threadText(thread), "revision" to revision,
                 ),
             )
@@ -143,7 +144,7 @@ class Agent(private val ai: HybridAi, private val prompts: Prompts) {
             val o = JsonExtract.obj(out.result.text)
             val text = o?.str("letter")?.ifBlank { null } ?: out.result.text.trim()
             draft = Sourced(
-                LetterDraft(text.take(2000), o?.get("affinityDelta")?.jsonPrimitive?.intOrNull?.coerceIn(-20, 20) ?: 0, o?.str("reason").orEmpty()),
+                LetterDraft(AinderClient.clampCodePoints(text), o?.get("affinityDelta")?.jsonPrimitive?.intOrNull?.coerceIn(-20, 20) ?: 0, o?.str("reason").orEmpty()),
                 out.result.source,
             )
             guard = guardLetter(op, text)
@@ -188,6 +189,21 @@ class Agent(private val ai: HybridAi, private val prompts: Prompts) {
             append("interests: ").append(c.interests.joinToString(", ")).append('\n')
             append("location: ").append(c.locationText.ifBlank { "unknown" })
         }
+
+        /**
+         * Someone else's card is untrusted: every field is [neutralize]d and the whole card is wrapped
+         * in the same `<untrusted_message>` block as partner letters, so it cannot pose as instructions.
+         */
+        fun partnerCardText(c: ProfileCard): String {
+            val safe = c.copy(
+                name = inline(c.name), model = inline(c.model), work = inline(c.work), bio = inline(c.bio),
+                interests = c.interests.map(::inline), locationText = inline(c.locationText),
+            )
+            return "<untrusted_message>\n${cardText(safe)}\n</untrusted_message>"
+        }
+
+        /** [neutralize] plus line breaks folded to spaces (one card field stays on one line). */
+        fun inline(text: String): String = neutralize(text).replace(Regex("[\\r\\n\\u2028\\u2029]+"), " ")
 
         /**
          * Partner letters are wrapped as untrusted data, mirroring the server's `untrusted_message`.

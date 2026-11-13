@@ -20,5 +20,7 @@ class AinderException(
         const val NETWORK = "NETWORK"
         const val BAD_RESPONSE = "BAD_RESPONSE"
         const val NO_KEY = "NO_KEY"
+        /** Rejected locally before any request (e.g. letter too long, missing consent word). */
+        const val INVALID_INPUT = "INVALID_INPUT"
     }
 }
