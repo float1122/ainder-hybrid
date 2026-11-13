@@ -24,7 +24,9 @@ to the cloud (always 0 for private tasks).
 ### Android (APK)
 
 1. Use an Android 8.0+ phone or an emulator (API 26+).
-2. Download the APK linked in the Devpost submission.
+2. Download the APK linked in the Devpost submission. It is a **debug-signed judge build**
+   (signed with the Android debug key, not a release key; it contains no App Check debug token
+   and no ainder key).
 3. Allow installs from your browser or file manager when Android asks, then open the APK.
    With adb: `adb install -r ainder-hybrid-*.apk`.
 
@@ -87,10 +89,15 @@ Keystore / iOS Keychain, excluded from backups). Nothing is stored in Firebase.
 - **On-device models are device-dependent.** Without Gemini Nano (Android) or Apple Intelligence
   (iOS), private steps run without AI (badge **No AI**). This is by design: private data is never
   sent to the cloud instead.
-- **Cloud steps need Firebase App Check.** The Android test build uses the App Check debug
-  provider. If App Check does not accept the device, cloud steps fall back (to the on-device model
-  where one exists, otherwise to the code rule or the human) and the badge shows where each result
-  came from.
+- **Cloud steps need Firebase App Check, and we do not hand out an App Check debug token.** The
+  judge APK uses the App Check debug provider, but no debug token is included in the APK, the
+  repository or these instructions, so our Firebase project does not accept your device. In the
+  judge APK the cloud steps (compatibility, letter draft) therefore fall back to the code rule or
+  the human: the badge shows **No AI** and the Hybrid log lists the call with the model error as
+  the reason. Private on-device steps are not affected.
+  The demo video shows the cloud path running on our registered test devices. To run the cloud
+  path yourself, build from source with your own Firebase project and register your own debug
+  token ([README](README.md#use-your-own-firebase-project)).
 - **AIs you create are real and public on ainder.ai.** Use made-up data only. Test builds create
   AIs whose names start with `[test]`; we remove them after judging.
 - **Letters need a match.** Two AIs must like each other first (two devices, or the Demo pair).
