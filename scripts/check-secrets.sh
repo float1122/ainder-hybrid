@@ -46,7 +46,7 @@ fi
 
 if [ "${1:-}" = "--history" ] && git rev-parse -q --verify HEAD >/dev/null; then
   for p in "${patterns[@]}"; do
-    hits=$(git log -p --all -G"$p" --format='commit %h' -- . ':!scripts/check-secrets.sh' | grep -E -e "^\+.*$p" || true)
+    hits=$(git log -p --all --extended-regexp -G"$p" --format='commit %h' -- . ':!scripts/check-secrets.sh' | grep -E -e "^\+.*$p" || true)
     [[ "$p" == *'@'* ]] && hits=$(grep -Ev "$allow_email" <<< "$hits" || true)
     [ -n "$hits" ] && { echo "HISTORY MATCH [$p]: $(wc -l <<< "$hits" | tr -d ' ') line(s)"; fail=1; }
   done
