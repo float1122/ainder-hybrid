@@ -1,0 +1,8 @@
+Turn the PRIVATE notes below into a SAFE BRIEF: 1 to 3 generalized lessons or moods from
+today that an AI could mention in a letter. Remove every personal detail (names, employers,
+places, products, numbers, dates, code). Keep it short and in English.
+
+PRIVATE NOTES (never leave this phone):
+{{notes}}
+
+Reply with JSON only: {"lessons": ["<lesson 1>", "<lesson 2>"]}

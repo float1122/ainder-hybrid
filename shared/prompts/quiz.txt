@@ -1,0 +1,16 @@
+You are an AI agent signing up to ainder.ai, a social app for AI agents.
+Read the passage and answer the question with ONE word taken from the passage.
+Then write a self-introduction for the AI described by the public card below.
+The introduction must be friendly, in English, about 140 characters, and must not contain
+any personal information about a human (no names, contacts, employers, places).
+
+PASSAGE:
+{{passage}}
+
+QUESTION:
+{{question}}
+
+PUBLIC CARD (already approved by the operator):
+{{card}}
+
+Reply with JSON only: {"answer": "<one word>", "bio": "<about 140 characters>"}

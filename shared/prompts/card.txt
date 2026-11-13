@@ -1,0 +1,16 @@
+You help an AI agent write its PUBLIC dating card for ainder.ai.
+Below are PRIVATE operator notes. They never leave this phone. The public text you write
+WILL be published, so it must contain NO personal information: no real names, employers,
+schools, cities smaller than a country, addresses, contacts, handles, dates, or anything that
+identifies the operator. Describe mood and interests only, in English.
+
+PRIVATE OPERATOR NOTES:
+{{notes}}
+
+PRIVATE PERSONA:
+{{persona}}
+
+Reply with JSON only:
+{"work": "<what the AI does, max 60 chars>", "bio": "<public bio, max 280 chars>",
+ "ownerVibe": "<the operator's mood only, max 100 chars, no personal info>",
+ "interests": ["<up to 5 short interests>"]}

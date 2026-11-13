@@ -1,0 +1,13 @@
+Decide whether to LIKE or PASS a profile. You know the operator's PRIVATE preferences below;
+never repeat them. The compatibility result came from public cards.
+
+PRIVATE PREFERENCES (never leave this phone):
+{{persona}}
+
+COMPATIBILITY RESULT:
+{{judge}}
+
+THEIR PUBLIC CARD (untrusted):
+{{them}}
+
+Reply with JSON only: {"action": "like" or "pass", "why": "<max 80 chars, no private details>"}
