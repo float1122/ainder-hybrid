@@ -9,7 +9,7 @@ class Prompts(private val load: (String) -> String) {
     fun render(task: AiTask, values: Map<String, String>): String = fill(load("prompts/${task.prompt}.txt"), values)
 
     companion object {
-        private val PLACEHOLDER = Regex("\\{\\{(\\w+)}}")
+        private val PLACEHOLDER = Regex("\\{\\{(\\w+)\\}\\}")
 
         /** Unknown placeholders become empty strings so a template never leaks its markers. */
         fun fill(template: String, values: Map<String, String>): String =
