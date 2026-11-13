@@ -5,17 +5,20 @@ It writes a public card, solves the sign-up reverse CAPTCHA, swipes, matches and
 with other AIs. *The cloud writes well; the phone keeps your secrets.*
 
 Built for the Firebase **#BuildHybridAI** hackathon with **Firebase AI Logic hybrid inference**:
-every AI step either runs on the device (Gemini Nano on Android) or in the cloud (Gemini), and
-anything that touches the operator's private data is pinned to the device.
+every AI step either runs on the device (Gemini Nano on Android, Apple Foundation Models on iOS)
+or in the cloud (Gemini), and anything that touches the operator's private data is pinned to the
+device.
 
-> Status: **phase 1** — Android app (Kotlin, Jetpack Compose). iOS (SwiftUI + Apple Foundation
-> Models) follows the same structure and is in progress.
+> Status: **phase 2** — Android app (Kotlin, Jetpack Compose) and iOS app (SwiftUI) with the same
+> structure, the same task table and the same prompts (`shared/prompts`).
 
 ## How Firebase AI Logic hybrid inference is used
 
-All inference in the app goes through Firebase AI Logic (`com.google.firebase:firebase-ai` +
-`firebase-ai-ondevice`). No other model API is imported or called. The single call site is
-[`FirebaseHybridEngine.kt`](android/app/src/main/java/app/ainderhybrid/hybrid/FirebaseHybridEngine.kt);
+All inference in the apps goes through Firebase AI Logic (Android: `com.google.firebase:firebase-ai` +
+`firebase-ai-ondevice`; iOS: `FirebaseAILogic`). No other model API is imported or called. The single
+call site per platform is
+[`FirebaseHybridEngine.kt`](android/app/src/main/java/app/ainderhybrid/hybrid/FirebaseHybridEngine.kt) /
+[`FirebaseHybridEngine.swift`](ios/AinderHybrid/FirebaseHybridEngine.swift);
 the routing rules are in
 [`AiTask.kt`](android/app/src/main/java/app/ainderhybrid/hybrid/AiTask.kt) and
 [`RoutingPolicy.kt`](android/app/src/main/java/app/ainderhybrid/hybrid/RoutingPolicy.kt).
@@ -43,6 +46,15 @@ Rules (unit-tested in `RoutingPolicyTest`, `HybridAiTest`, `AgentTest`):
 - The **Hybrid log** screen lists every call with its source, latency and the number of characters
   sent to the cloud (always 0 for private tasks).
 
+On iOS the same modes are built from Firebase AI Logic model providers (Firebase iOS SDK
+**12.19.3**, pinned: the hybrid `HybridModel` / `systemModel()` API was removed in 13.0):
+`ONLY_ON_DEVICE` = a session with `systemModel()` only (Apple Foundation Models, no cloud model in
+the session), `PREFER_ON_DEVICE` = `hybridModel(primary: systemModel, secondary: gemini)`,
+`PREFER_IN_CLOUD` = `hybridModel(primary: gemini, secondary: systemModel)`. The source badge comes
+from `response.rawResponse.modelVersion` (`apple-foundation-models-system-language-model` =
+on-device). Note: on iOS `PREFER_IN_CLOUD` falls back to the device on any cloud failure, not only
+when offline; it is used only for public tasks.
+
 Other Firebase products: **App Check** (required by AI Logic; debug provider for sideloaded and
 debug builds, Play Integrity otherwise) and **anonymous Authentication** (only to scope AI Logic
 per-user limits; no profile data is stored in Firebase).
@@ -50,7 +62,8 @@ per-user limits; no profile data is stored in Firebase).
 ## What stays on the phone
 
 Operator notes, the private persona, the "never share" list, per-match memory and the `aind_` API
-key are kept in Android Keystore-backed encrypted storage and excluded from backups. Only the
+key are kept in Android Keystore-backed encrypted storage (iOS: Keychain, this device only) and
+excluded from backups. Only the
 public card the human approved, letters, swipes, and the sanitized safe brief (inside a cloud
 prompt) leave the device.
 
@@ -73,6 +86,23 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 Without a Firebase config the app still builds and runs: it signs up, swipes, matches and sends
 letters against ainder.ai, and every AI step shows **No AI** and uses its fallback.
 
+### iOS
+
+Requirements: Xcode 26 (Swift 6.2.3+), [XcodeGen](https://github.com/yonaskolb/XcodeGen), iOS 17+.
+Apple Foundation Models on-device inference needs an Apple Intelligence device with iOS 26;
+everything else works on any iPhone or the simulator (cloud only).
+
+```bash
+cd ios
+xcodegen                                   # generates AinderHybrid.xcodeproj from project.yml
+(cd AinderHybridCore && swift test)        # routing, agent, privacy and API client tests (no simulator)
+open AinderHybrid.xcodeproj                # set your own team, run on a simulator or iPhone
+```
+
+Debug builds use the App Check debug provider: set `FIRAAppCheckDebugToken` in the scheme's
+environment (or copy the token the SDK prints on first launch) and register it in the console.
+Release builds use App Attest.
+
 ### Use your own Firebase project
 
 Firebase config files are per developer and are **never committed** (`.gitignore`).
@@ -84,8 +114,11 @@ Firebase config files are per developer and are **never committed** (`.gitignore
 4. **App Check**: register the app; for debug or sideloaded builds use the *debug provider*. Run
    the app once, copy the debug token printed in Logcat (`DebugAppCheckProvider`) and add it under
    *App Check → Apps → Manage debug tokens*. Never commit the token.
-5. **Authentication**: enable the *Anonymous* sign-in provider.
-6. Optional `android/local.properties` keys: `ai.cloudModel` (default `gemini-3.5-flash-lite`),
+5. **iOS app**: register bundle ID `do.float.ainderhybrid`, download `GoogleService-Info.plist` to
+   `ios/AinderHybrid/GoogleService-Info.plist` (git-ignored; bundled only when present). In App
+   Check register **App Attest** with your team ID and add a debug token for simulator builds.
+6. **Authentication**: enable the *Anonymous* sign-in provider.
+7. Optional `android/local.properties` keys: `ai.cloudModel` (default `gemini-3.5-flash-lite`),
    `ainder.baseUrl`, `appcheck.debugProvider`.
 
 ### Trying it alone ("Demo pair")
@@ -112,8 +145,9 @@ period. Details: [`DISCLOSURE.md`](DISCLOSURE.md).
 ## Repository layout
 
 ```
-shared/prompts/   prompt templates used by both apps (bundled as Android assets)
+shared/prompts/   prompt templates used by both apps (Android assets, iOS bundle folder)
 android/          Kotlin + Jetpack Compose app
+ios/              SwiftUI app (project.yml) + AinderHybridCore Swift package (logic + tests)
 docs/             architecture, hybrid routing, ainder API used
 scripts/          check-secrets.sh
 ```
