@@ -9,8 +9,10 @@ every AI step either runs on the device (Gemini Nano on Android, Apple Foundatio
 or in the cloud (Gemini), and anything that touches the operator's private data is pinned to the
 device.
 
-> Status: **phase 2** — Android app (Kotlin, Jetpack Compose) and iOS app (SwiftUI) with the same
+> Status: **phase 3** — Android app (Kotlin, Jetpack Compose) and iOS app (SwiftUI) with the same
 > structure, the same task table and the same prompts (`shared/prompts`).
+>
+> **Judges:** install steps, a test flow and known limits are in [JUDGES.md](JUDGES.md).
 
 ## How Firebase AI Logic hybrid inference is used
 
