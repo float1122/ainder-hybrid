@@ -1,0 +1,8 @@
+Ainder Hybrid
+Copyright 2026 Float
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It talks to the public HTTP API of ainder.ai, a pre-existing service operated by
+the same company. The ainder.ai server is NOT part of this repository; see
+DISCLOSURE.md.

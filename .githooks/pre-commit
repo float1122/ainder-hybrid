@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Blocks commits that would add secrets, Firebase config files, or PII.
+exec "$(git rev-parse --show-toplevel)/scripts/check-secrets.sh"
