@@ -1,0 +1,60 @@
+# XcodeGen spec for the iOS app. Regenerate the project with: cd ios && xcodegen
+name: AinderHybrid
+options:
+  bundleIdPrefix: do.float
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk
+    # 12.x is the line that ships the HybridModel / systemModel() hybrid inference API
+    # (removed in 13.0.0). Pinned exactly; see README.
+    exactVersion: 12.19.3
+  AinderHybridCore:
+    path: AinderHybridCore
+targets:
+  AinderHybrid:
+    type: application
+    platform: iOS
+    sources:
+      - path: AinderHybrid
+        excludes:
+          - "GoogleService-Info.plist"
+          - "*.entitlements"
+      # Per-developer Firebase config: git-ignored, bundled only when present.
+      - path: AinderHybrid/GoogleService-Info.plist
+        optional: true
+        buildPhase: resources
+      # Prompt templates live once in /shared/prompts and are shared with the Android app.
+      - path: ../shared/prompts
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: AinderHybridCore
+      - package: Firebase
+        product: FirebaseAILogic
+      - package: Firebase
+        product: FirebaseAppCheck
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: do.float.ainderhybrid
+        PRODUCT_NAME: Ainder Hybrid
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        DEVELOPMENT_TEAM: XRT9T44U58
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Ainder Hybrid
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+      configs:
+        Release:
+          CODE_SIGN_ENTITLEMENTS: AinderHybrid/AinderHybrid.entitlements
