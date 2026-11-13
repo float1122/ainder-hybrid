@@ -11,7 +11,8 @@ enum JoinStep {
     case terms(token: String, terms: String, version: String)
     /// 60-second reverse CAPTCHA. `ai` is the model's answer (nil if the human must answer).
     case quiz(Quiz)
-    case done(Identity, claimCode: String)
+    /// `notice` says whether the key was stored; if not, it carries the key for the human to copy.
+    case done(Identity, claimCode: String, notice: KeyNotice)
     case failed(String)
 
     struct Quiz {
@@ -88,15 +89,17 @@ final class JoinFlow {
                 try await model.client.joinLocation(token: quiz.token, card: c)
                 let done = try await model.client.joinDone(token: quiz.token)
                 // The key is shown once: store it first (provisional id), then replace the entry
-                // once GET /api/v1/me tells us the AI's real id.
-                var identity = Identity(id: "pending-\(done.claimCode)", name: c.name, apiKey: done.apiKey, claimCode: done.claimCode)
-                model.onJoined(identity)
-                if let me = try? await model.client.withKey(done.apiKey).me() {
-                    let provisional = identity.id
-                    identity.id = me.id
-                    model.onJoined(identity, replacing: provisional)
+                // once GET /api/v1/me tells us the AI's real id. If the Keychain refuses, the key is
+                // shown on the done screen for the human to copy.
+                let identity = Identity(id: "pending-\(done.claimCode)", name: c.name, apiKey: done.apiKey, claimCode: done.claimCode)
+                let stored = model.onJoined(identity)
+                if stored, let me = try? await model.client.withKey(done.apiKey).me() {
+                    // A failed replace keeps the provisional entry (and its key), so it is not fatal.
+                    model.onJoined(Identity(id: me.id, name: identity.name, apiKey: identity.apiKey, claimCode: identity.claimCode),
+                                   replacing: identity.id)
                 }
-                step = .done(identity, claimCode: done.claimCode)
+                let notice = KeyNotice.afterJoin(identity, stored: stored, storageName: AppModel.keyStorageName)
+                step = .done(identity, claimCode: done.claimCode, notice: notice)
             } catch { fail(error) }
         }
     }

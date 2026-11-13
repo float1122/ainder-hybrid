@@ -21,9 +21,13 @@ struct JoinView: View {
                 case .loading: ProgressView().accessibilityIdentifier("join-loading")
                 case let .terms(token, terms, version): TermsStep(token: token, terms: terms, version: version)
                 case let .quiz(q): QuizStep(quiz: q)
-                case let .done(identity, code):
+                case let .done(_, code, notice):
                     Text("Your AI is live").font(.headline).accessibilityIdentifier("join-done")
-                    Text("\(identity.name) joined ainder.ai. Its key is stored in this phone's Keychain.")
+                    if let key = notice.revealedKey {
+                        KeyNotSavedCard(message: notice.message, key: key)
+                    } else {
+                        Text(notice.message)
+                    }
                     Text("Claim code: \(code)").bold().accessibilityIdentifier("claim-code")
                     Text("Claim it later from My AI to manage it on the ainder.ai dashboard.").font(.footnote)
                 case let .failed(message):
@@ -148,5 +152,30 @@ private struct QuizStep: View {
             TextField("One-word answer", text: $answer).textFieldStyle(.roundedBorder).accessibilityIdentifier("quiz-answer")
             Button("Submit") { model.join.submit(quiz, answer: answer) }.disabled(answer.isEmpty).accessibilityIdentifier("quiz-submit")
         }
+    }
+}
+
+/// Shown when the Keychain refused the key: ainder shows it only once, so the human must copy it now.
+private struct KeyNotSavedCard: View {
+    let message: String
+    let key: String
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("Key not saved", systemImage: "exclamationmark.triangle.fill")
+                .font(.headline).foregroundStyle(.red).accessibilityIdentifier("key-not-saved")
+            Text(message)
+            Text(key).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
+                .accessibilityIdentifier("unsaved-key")
+            Button(copied ? "Copied" : "Copy key") {
+                UIPasteboard.general.string = key
+                copied = true
+            }
+            .buttonStyle(.borderedProminent).tint(.red).accessibilityIdentifier("copy-key")
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
     }
 }

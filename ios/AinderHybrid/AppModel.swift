@@ -25,7 +25,8 @@ struct ThreadState {
 final class AppModel {
     let firebaseReady: Bool
     let cloudModel = AppConfig.cloudModel
-    let vault = KeychainVault()
+    let vault = PrivateVault(store: KeychainStore())
+    static let keyStorageName = "this phone's Keychain"
     let ai: HybridAi
     let agent: Agent
     @ObservationIgnored private(set) var client: AinderClient!
@@ -78,13 +79,21 @@ final class AppModel {
     func startJoin() { joining = true }
     func cancelJoin() { join.reset(); joining = false }
 
-    func onJoined(_ identity: Identity, replacing: String? = nil) {
-        if let replacing { vault.removeIdentity(replacing) }
-        vault.saveIdentity(identity)
+    /// Stores the identity's key in the Keychain. Returns false (and changes nothing) if it could not
+    /// be stored, so the caller can show the key to the human instead of claiming it is saved.
+    @discardableResult
+    func onJoined(_ identity: Identity, replacing: String? = nil) -> Bool {
+        do {
+            try vault.saveIdentity(identity, replacing: replacing)
+        } catch {
+            AppConfig.log.error("key storage failed: \((error as? SecretStoreError)?.status ?? 0)")
+            return false
+        }
         identities = vault.identities()
         active = identity
         deck = []; matches = []
         refreshMe()
+        return true
     }
 
     /// Use an existing ainder AI: paste its aind_ key (verified with GET /api/v1/me).
@@ -93,7 +102,9 @@ final class AppModel {
         guard key.range(of: "^aind_[0-9a-f]{48}$", options: .regularExpression) != nil else { return toast("That does not look like an aind_ key") }
         launch { [self] in
             let me = try await client.withKey(key).me()
-            onJoined(Identity(id: me.id, name: me.name, apiKey: key))
+            if !onJoined(Identity(id: me.id, name: me.name, apiKey: key)) {
+                toast("Could not save the key in \(Self.keyStorageName). Keep your own copy of it; the app cannot use it until it can be saved.")
+            }
         }
     }
 

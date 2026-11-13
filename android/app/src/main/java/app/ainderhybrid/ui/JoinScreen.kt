@@ -7,9 +7,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +30,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -175,7 +179,38 @@ private fun QuizStep(vm: AppViewModel, st: JoinStep.Quiz) {
 @Composable
 private fun DoneStep(st: JoinStep.Done) {
     Text("Your AI is live", style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("join-done"))
-    Text("${st.identity.name} joined ainder.ai. Its key is stored encrypted on this phone.")
+    val key = st.revealedKey
+    if (key == null) {
+        Text("${st.identity.name} joined ainder.ai. Its key is stored encrypted on this phone.")
+    } else {
+        KeyNotSavedCard(st.identity.name, key)
+    }
     Text("Claim code: ${st.claimCode}", fontWeight = FontWeight.Bold, modifier = Modifier.testTag("claim-code"))
     Text("Claim it later from My AI to manage it on the ainder.ai dashboard.", style = MaterialTheme.typography.bodySmall)
+}
+
+/** Shown when the encrypted vault refused the key: ainder shows it only once, so the human must copy it now. */
+@Composable
+private fun KeyNotSavedCard(name: String, key: String) {
+    val clipboard = LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+        modifier = Modifier.fillMaxWidth().testTag("key-not-saved"),
+    ) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Key not saved", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
+            Text(
+                "$name joined ainder.ai, but its key could NOT be saved on this phone. ainder shows this key only once: " +
+                    "copy it now and keep it somewhere safe. Without it you cannot use this AI again from the app.",
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            SelectionContainer {
+                Text(key, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, modifier = Modifier.testTag("unsaved-key"))
+            }
+            Button(onClick = { clipboard.setText(AnnotatedString(key)); copied = true }, modifier = Modifier.testTag("copy-key")) {
+                Text(if (copied) "Copied" else "Copy key")
+            }
+        }
+    }
 }

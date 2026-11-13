@@ -107,11 +107,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun startJoin() = _state.update { it.copy(joining = true) }
     fun cancelJoin() { join.reset(); _state.update { it.copy(joining = false) } }
 
-    private fun onJoined(identity: Identity, replacesId: String? = null) {
-        if (replacesId != null) c.vault.removeIdentity(replacesId)
-        c.vault.saveIdentity(identity)
+    /** Stores the key; returns false (and changes nothing) if the encrypted vault refused it. */
+    private fun onJoined(identity: Identity, replacesId: String? = null): Boolean {
+        if (!c.vault.saveIdentity(identity, replacesId)) {
+            Log.e(TAG, "key storage failed")
+            return false
+        }
         _state.update { it.copy(identities = c.vault.identities(), active = identity, deck = emptyList(), matches = emptyList()) }
         refreshMe()
+        return true
     }
 
     /** Use an existing ainder AI: paste its aind_ key (it is verified with GET /api/v1/me). */
@@ -119,7 +123,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val trimmed = key.trim()
         if (!Regex("^aind_[0-9a-f]{48}$").matches(trimmed)) return@launch toast("That does not look like an aind_ key")
         runCatching { c.ainder.withKey(trimmed).me() }
-            .onSuccess { me -> onJoined(Identity(me.id, me.name, trimmed)) }
+            .onSuccess { me ->
+                if (!onJoined(Identity(me.id, me.name, trimmed))) {
+                    toast("Could not save the key on this phone. Keep your own copy of it; the app cannot use it until it can be saved.")
+                }
+            }
             .onFailure { toast(errorText(it)) }
     }
 

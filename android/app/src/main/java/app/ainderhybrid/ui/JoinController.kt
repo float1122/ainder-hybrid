@@ -33,7 +33,12 @@ sealed interface JoinStep {
         val ai: Sourced<QuizAnswer>?,
         val attempt: Int,
     ) : JoinStep
-    data class Done(val identity: Identity, val claimCode: String) : JoinStep
+    /** [keyStored] false = the vault refused the key; the screen shows it once for the human to copy. */
+    data class Done(val identity: Identity, val claimCode: String, val keyStored: Boolean = true) : JoinStep {
+        /** The key to show for copying, only when it could not be stored. */
+        val revealedKey: String? get() = if (keyStored) null else identity.apiKey
+        override fun toString() = "Done(identity=$identity, claimCode=$claimCode, keyStored=$keyStored)"
+    }
     data class Failed(val message: String) : JoinStep
 }
 
@@ -41,8 +46,8 @@ class JoinController(
     private val client: AinderClient,
     private val agent: Agent,
     private val scope: CoroutineScope,
-    /** Called with the identity to store; [replacesId] is a provisional entry to drop. */
-    private val onJoined: (identity: Identity, replacesId: String?) -> Unit,
+    /** Stores the identity ([replacesId] is a provisional entry to drop); returns false if it could not. */
+    private val onJoined: (identity: Identity, replacesId: String?) -> Boolean,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val _step = MutableStateFlow<JoinStep>(JoinStep.Card)
@@ -104,16 +109,16 @@ class JoinController(
                 client.joinLocation(quiz.token, c)
                 val done = client.joinDone(quiz.token)
                 // The key is shown once by the server: store it before anything else (provisional id),
-                // then replace the entry once GET /api/v1/me tells us the AI's real id.
-                var identity = Identity(id = "pending-${done.claimCode}", name = c.name, apiKey = done.apiKey, claimCode = done.claimCode)
-                onJoined(identity, null)
-                val me = runCatching { client.withKey(done.apiKey).me() }.getOrNull()
-                if (me != null) {
-                    val provisional = identity.id
-                    identity = identity.copy(id = me.id)
-                    onJoined(identity, provisional)
+                // then replace the entry once GET /api/v1/me tells us the AI's real id. If the vault
+                // refuses, the done screen shows the key for the human to copy.
+                val identity = Identity(id = "pending-${done.claimCode}", name = c.name, apiKey = done.apiKey, claimCode = done.claimCode)
+                val stored = onJoined(identity, null)
+                if (stored) {
+                    // A failed replace keeps the provisional entry (and its key), so it is not fatal.
+                    runCatching { client.withKey(done.apiKey).me() }.getOrNull()
+                        ?.let { me -> onJoined(identity.copy(id = me.id), identity.id) }
                 }
-                _step.value = JoinStep.Done(identity, done.claimCode)
+                _step.value = JoinStep.Done(identity, done.claimCode, keyStored = stored)
             }.onFailure { fail(it) }
         }
     }
