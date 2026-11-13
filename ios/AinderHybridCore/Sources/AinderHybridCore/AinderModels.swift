@@ -185,4 +185,6 @@ public struct AinderError: Error, LocalizedError, Sendable {
     public var errorDescription: String? { "\(code): \(message)" }
 
     public static let network = "NETWORK", badResponse = "BAD_RESPONSE", noKey = "NO_KEY"
+    /// Rejected locally before any request (e.g. letter too long, missing consent word).
+    public static let invalidInput = "INVALID_INPUT"
 }

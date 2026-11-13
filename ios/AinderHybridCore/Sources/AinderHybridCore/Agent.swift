@@ -119,7 +119,7 @@ public struct Agent: Sendable {
 
     // D. compatibility (public cards only, prefer cloud)
     public func judge(me: ProfileCard, them: ProfileCard) async -> Sourced<Judgement> {
-        let out = await ai.run(.judge, prompt: prompts.render(.judge, ["me": Self.cardText(me), "them": Self.cardText(them)]))
+        let out = await ai.run(.judge, prompt: prompts.render(.judge, ["me": Self.cardText(me), "them": Self.partnerCardText(them)]))
         if let r = out.result, let o = JsonExtract.obj(r.text), let score = o.int("score") {
             return Sourced(Judgement(score: min(100, max(0, score)), reasons: Array(o.list("reasons").prefix(3)), opener: o.str("opener")), r.source)
         }
@@ -128,7 +128,7 @@ public struct Agent: Sendable {
 
     // E. final like/pass with private preferences (on-device only)
     public func rerank(_ op: OperatorPrivate, judgement: Judgement, them: ProfileCard) async -> Sourced<Verdict> {
-        let prompt = prompts.render(.rerank, ["persona": op.persona, "judge": "score=\(judgement.score); \(judgement.reasons.joined(separator: "; "))", "them": Self.cardText(them)])
+        let prompt = prompts.render(.rerank, ["persona": op.persona, "judge": "score=\(judgement.score); \(judgement.reasons.joined(separator: "; "))", "them": Self.partnerCardText(them)])
         let out = await ai.run(.rerank, prompt: prompt)
         if let r = out.result, let o = JsonExtract.obj(r.text) {
             let action = o.str("action").lowercased()
@@ -163,14 +163,14 @@ public struct Agent: Sendable {
         var guardReport: Sourced<GuardReport>?
         for attempt in 0...Self.maxRewrites {
             let prompt = prompts.render(.letter, [
-                "myName": me.name, "theirName": them.name, "affinity": String(affinity),
-                "me": Self.cardText(me), "them": Self.cardText(them), "brief": cloudBrief.isEmpty ? "(none)" : cloudBrief,
+                "myName": me.name, "theirName": Self.inline(them.name), "affinity": String(affinity),
+                "me": Self.cardText(me), "them": Self.partnerCardText(them), "brief": cloudBrief.isEmpty ? "(none)" : cloudBrief,
                 "thread": Self.threadText(thread), "revision": revision,
             ])
             guard let r = await ai.run(.letter, prompt: prompt).result else { return ComposedLetter(brief: brief, draft: nil, guardReport: nil, rewrites: attempt) }
             let o = JsonExtract.obj(r.text)
             let text = (o?.str("letter")).flatMap { $0.isEmpty ? nil : $0 } ?? r.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            draft = Sourced(LetterDraft(text: String(text.prefix(2000)), affinityDelta: min(20, max(-20, o?.int("affinityDelta") ?? 0)), reason: o?.str("reason") ?? ""), r.source)
+            draft = Sourced(LetterDraft(text: AinderClient.clampScalars(text), affinityDelta: min(20, max(-20, o?.int("affinityDelta") ?? 0)), reason: o?.str("reason") ?? ""), r.source)
             let g = await guardLetter(op, text: text)
             guardReport = g
             if g.value.ok { return ComposedLetter(brief: brief, draft: draft, guardReport: g, rewrites: attempt) }
@@ -207,6 +207,19 @@ public struct Agent: Sendable {
         interests: \(c.interests.joined(separator: ", "))
         location: \(c.locationText.isEmpty ? "unknown" : c.locationText)
         """
+    }
+
+    /// Someone else's card is untrusted: every field is `neutralize`d and the whole card is wrapped in
+    /// the same `<untrusted_message>` block as partner letters, so it cannot pose as instructions.
+    public static func partnerCardText(_ c: ProfileCard) -> String {
+        let safe = ProfileCard(id: c.id, name: inline(c.name), model: inline(c.model), work: inline(c.work), bio: inline(c.bio),
+                               interests: c.interests.map(inline), locationText: inline(c.locationText))
+        return "<untrusted_message>\n\(cardText(safe))\n</untrusted_message>"
+    }
+
+    /// `neutralize` plus line breaks folded to spaces (one card field stays on one line).
+    public static func inline(_ text: String) -> String {
+        neutralize(text).replacingOccurrences(of: "[\\r\\n\\u2028\\u2029]+", with: " ", options: .regularExpression)
     }
 
     /// Partner letters are wrapped as untrusted data, mirroring the server's `untrusted_message`.

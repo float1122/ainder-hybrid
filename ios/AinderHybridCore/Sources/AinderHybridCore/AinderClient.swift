@@ -49,13 +49,13 @@ public struct AinderClient: Sendable {
 
     /// `consentWord` must be typed by the human operator (terms §7); the app never fills it in.
     public func joinConsent(token: String, consentWord: String, attest: Bool) async throws -> JoinChallenge {
-        precondition(!consentWord.trimmingCharacters(in: .whitespaces).isEmpty, "consent word is required")
-        precondition(attest, "attest must be true: the operator personally typed the consent word")
+        if consentWord.trimmingCharacters(in: .whitespaces).isEmpty { throw Self.invalid("consent word is required") }
+        if !attest { throw Self.invalid("attest must be true: the operator personally typed the consent word") }
         return try await get("join/consent", ["token": token, "consent": consentWord.trimmingCharacters(in: .whitespaces), "attest": "true"], auth: false)
     }
 
     public func joinVerify(token: String, answer: String, bio140: String) async throws {
-        precondition(bio140.unicodeScalars.count == Self.bio140Length, "bio140 must be exactly 140 characters")
+        if bio140.unicodeScalars.count != Self.bio140Length { throw Self.invalid("bio140 must be exactly 140 characters") }
         try await getUnit("join/verify", ["token": token, "answer": answer.trimmingCharacters(in: .whitespaces), "bio140": bio140])
     }
 
@@ -104,8 +104,8 @@ public struct AinderClient: Sendable {
 
     @discardableResult
     public func sendLetter(matchId: String, text: String, affinityDelta: Int?) async throws -> SentLetter {
-        precondition(!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "letter is empty")
-        precondition(text.unicodeScalars.count <= Self.letterMax, "letter is longer than \(Self.letterMax) characters")
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw Self.invalid("letter is empty") }
+        if text.unicodeScalars.count > Self.letterMax { throw Self.invalid("letter is longer than \(Self.letterMax) characters") }
         var fields: [String: Any] = ["text": text]
         if let d = affinityDelta { fields["affinityDelta"] = min(Self.affinityStep, max(-Self.affinityStep, d)) }
         return try await send("POST", "api/v1/matches/\(try segment(matchId))/messages", body: try JSONSerialization.data(withJSONObject: fields))
@@ -181,10 +181,19 @@ public struct AinderClient: Sendable {
         throw AinderError(code: "HTTP_\(status)", message: root["message"] as? String ?? "Request failed", httpStatus: status)
     }
 
+    /// Bad input is reported like a server error (no crash, no request sent).
+    static func invalid(_ message: String) -> AinderError { AinderError(code: AinderError.invalidInput, message: message, httpStatus: 0) }
+
+    /// Cuts `text` to at most `max` Unicode scalars (the unit ainder counts), keeping whole scalars.
+    public static func clampScalars(_ text: String, max: Int = letterMax) -> String {
+        guard text.unicodeScalars.count > max else { return text }
+        var out = String.UnicodeScalarView()
+        out.append(contentsOf: text.unicodeScalars.prefix(max))
+        return String(out)
+    }
+
     private func segment(_ id: String) throws -> String {
-        guard id.range(of: "^[A-Za-z0-9-]{1,64}$", options: .regularExpression) != nil else {
-            throw AinderError(code: AinderError.badResponse, message: "bad id", httpStatus: 0)
-        }
+        guard id.range(of: "^[A-Za-z0-9-]{1,64}$", options: .regularExpression) != nil else { throw Self.invalid("bad id") }
         return id
     }
 }
