@@ -20,8 +20,8 @@ patterns=(
   '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'         # e-mail address (PII)
   '01[016789][-. ]?[0-9]{3,4}[-. ]?[0-9]{4}'                # KR mobile number (PII)
 )
-# E-mail addresses that are allowed to appear (placeholders / license text).
-allow_email='(example\.(com|org)|apache\.org|noreply@anthropic\.com)'
+# E-mail addresses that are allowed to appear (placeholders / license text / public company contact).
+allow_email='(example\.(com|org)|apache\.org|noreply@anthropic\.com|contact@float\.do)'
 forbidden_files='(^|/)(google-services\.json|GoogleService-Info\.plist|local\.properties|secrets\.properties|.*\.(jks|keystore|p12|mobileprovision))$'
 
 fail=0
